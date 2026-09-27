@@ -1,28 +1,35 @@
 class_name Hud
 extends CanvasLayer
-## Hit stats, a knock-down banner, the controls card and a small "sword pad"
-## that shows where the fist is inside its reachable box.
+## Minimal readouts in the spirit of Half Sword: a wound chart for your
+## sparring partner, your own blood, a tiny crosshair and a controls card.
 
-const INK := Color(0.96, 0.95, 0.9)
-const DIM := Color(0.96, 0.95, 0.9, 0.55)
-const HOT := Color(1.0, 0.8, 0.25)
-const PANEL := Color(0.07, 0.08, 0.1, 0.62)
+const INK := Color(0.92, 0.89, 0.82)
+const DIM := Color(0.92, 0.89, 0.82, 0.55)
+const BLOOD := Color(0.62, 0.08, 0.06)
+const PANEL := Color(0.05, 0.04, 0.03, 0.55)
+const PART_NAMES := {
+	"head": "head", "chest": "torso", "pelvis": "hips",
+	"arm_upper_r": "right arm", "arm_lower_r": "right forearm",
+	"arm_upper_l": "left arm", "arm_lower_l": "left forearm",
+	"leg_upper_r": "right thigh", "leg_lower_r": "right shin",
+	"leg_upper_l": "left thigh", "leg_lower_l": "left shin",
+}
 
-const CONTROLS := """WASD  walk        Shift  sprint      Space  jump
-Mouse  look        Hold LMB  control the sword
-Scroll  reach in / out     Q / E  roll the blade
-C  back to guard   F  go limp (hold)   R  respawn
-H  hide this       Esc  free the mouse"""
+const CONTROLS := """Mouse  look / turn        Hold LMB  drag your sword arm
+Hold RMB  half-sword grip   Alt / MMB  thrust (push mouse forward)
+Scroll  reach   Q / E  roll the blade   C  back to guard
+WASD  move   Shift  sprint (tap + direction: dodge)   Ctrl  crouch
+Space  kick   Tab  lock on   V  first person
+T  new sparring partner   R  respawn   F  go limp   H  hide   Esc  free mouse"""
 
-var _hits := 0
-var _best := 0
-var _total := 0
-var _stats: Label
-var _last: Label
-var _banner: Label
+var _chart: WoundChart
+var _status: Label
+var _log: Label
+var _lines: Array[String] = []
+var _self_bar: ProgressBar
+var _self_label: Label
 var _controls: PanelContainer
 var _click: Label
-var _pad: SwordPad
 
 
 func _ready() -> void:
@@ -31,43 +38,49 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	var stats_box := _panel(root)
-	stats_box.position = Vector2(20, 20)
+	var panel := _panel(root)
+	panel.position = Vector2(18, 18)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	panel.add_child(row)
+	_chart = WoundChart.new()
+	_chart.custom_minimum_size = Vector2(92, 170)
+	row.add_child(_chart)
 	var col := VBoxContainer.new()
-	stats_box.add_child(col)
-	_stats = _label(col, 18, INK)
-	_last = _label(col, 30, HOT)
-	_refresh_stats(0, 0.0)
+	col.add_theme_constant_override("separation", 4)
+	row.add_child(col)
+	_label(col, 13, DIM).text = "SPARRING PARTNER"
+	_status = _label(col, 20, INK)
+	_log = _label(col, 14, INK)
+	_log.custom_minimum_size = Vector2(230, 0)
 
-	_banner = _label(root, 42, HOT)
-	_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_banner.offset_top = 90
-	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var self_box := VBoxContainer.new()
+	self_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	self_box.offset_bottom = -22
+	self_box.offset_top = -60
+	self_box.offset_left = -110
+	self_box.offset_right = 110
+	root.add_child(self_box)
+	_self_label = _label(self_box, 13, DIM)
+	_self_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_self_bar = _bar(self_box)
 
-	_click = _label(root, 26, INK)
-	_click.text = "Click to play"
+	var cross := Crosshair.new()
+	cross.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	root.add_child(cross)
+
+	_click = _label(root, 24, INK)
+	_click.text = "Click to fight"
 	_click.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_click.offset_top = 160
+	_click.offset_top = 150
 	_click.grow_horizontal = Control.GROW_DIRECTION_BOTH
 
 	_controls = _panel(root)
 	_controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_controls.offset_left = 20
-	_controls.offset_bottom = -20
+	_controls.offset_left = 18
+	_controls.offset_bottom = -18
 	_controls.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	var controls_label := _label(_controls, 15, INK)
-	controls_label.text = CONTROLS
-
-	_pad = SwordPad.new()
-	_pad.custom_minimum_size = Vector2(170, 190)
-	var pad_panel := _panel(root)
-	pad_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	pad_panel.offset_right = -20
-	pad_panel.offset_bottom = -20
-	pad_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	pad_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	pad_panel.add_child(_pad)
+	_label(_controls, 13, DIM).text = CONTROLS
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -79,39 +92,42 @@ func _process(_delta: float) -> void:
 	_click.visible = Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
 
 
-func add_hit(damage: int, speed: float) -> void:
-	_hits += 1
-	_total += damage
-	_best = maxi(_best, damage)
-	_refresh_stats(damage, speed)
+func show_fighter(fighter: ActiveRagdoll) -> void:
+	_chart.fighter = fighter
+	_chart.queue_redraw()
+	var blood := roundi(fighter.blood / fighter.max_blood * 100.0)
+	var state := "Standing"
+	if fighter.is_dead():
+		state = "Dead"
+	elif fighter.is_down():
+		state = "Down"
+	_status.text = "%s  ·  blood %d%%" % [state, blood]
+	_status.add_theme_color_override("font_color", BLOOD.lightened(0.3) if fighter.is_dead() else INK)
 
 
-func set_status(player_down: bool, dummy_down: bool) -> void:
-	if player_down:
-		_banner.text = "You fell over"
-	elif dummy_down:
-		_banner.text = "Dummy down!"
-	else:
-		_banner.text = ""
+func show_player(player: Player) -> void:
+	_self_bar.value = player.blood / player.max_blood * 100.0
+	var state := "you are dead  ·  R to respawn" if player.is_dead() else ("you are down" if player.is_down() else "")
+	if player.half_sword_held:
+		state = "half-sword grip"
+	elif player.thrusting:
+		state = "thrust"
+	_self_label.text = state
 
 
-func set_sword_state(hand: Vector3, active: bool, roll: float) -> void:
-	_pad.hand = hand
-	_pad.active = active
-	_pad.roll = roll
-	_pad.queue_redraw()
-
-
-func _refresh_stats(last: int, speed: float) -> void:
-	_stats.text = "HITS %d    BEST %d    TOTAL %d" % [_hits, _best, _total]
-	_last.text = "%d dmg  ·  %.1f m/s" % [last, speed] if _hits > 0 else "Hit the dummy"
+func log_hit(part_name: String, kind: String, damage: float) -> void:
+	var what: String = {"cut": "Cut", "stab": "Stab", "blunt": "Blow", "armor": "Glanced off armour"}.get(kind, kind)
+	_lines.push_front("%s · %s · %d" % [what, PART_NAMES.get(part_name, part_name), roundi(damage)])
+	if _lines.size() > 5:
+		_lines.resize(5)
+	_log.text = "\n".join(_lines)
 
 
 func _panel(parent: Control) -> PanelContainer:
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
 	style.bg_color = PANEL
-	style.set_corner_radius_all(6)
+	style.set_corner_radius_all(3)
 	style.set_content_margin_all(12)
 	panel.add_theme_stylebox_override("panel", style)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -123,34 +139,66 @@ func _label(parent: Control, size: int, color: Color) -> Label:
 	var label := Label.new()
 	label.add_theme_font_size_override("font_size", size)
 	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	label.add_theme_constant_override("outline_size", 4)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(label)
 	return label
 
 
-## Front view of the fist's reachable box (x/y) with a reach bar (z).
-class SwordPad extends Control:
-	var hand := Vector3.ZERO
-	var active := false
-	var roll := 0.0
+func _bar(parent: Control) -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(220, 6)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0, 0, 0, 0.5)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = BLOOD
+	bar.add_theme_stylebox_override("background", bg)
+	bar.add_theme_stylebox_override("fill", fill)
+	bar.value = 100.0
+	parent.add_child(bar)
+	return bar
+
+
+## Front view of a fighter, each body part shaded by how badly it is hurt.
+## Severed parts are crossed out.
+class WoundChart extends Control:
+	var fighter: ActiveRagdoll
+	# Rects in a 92 x 170 box, drawn facing the viewer (their right is our left).
+	const LAYOUT := {
+		"head": Rect2(36, 2, 20, 22),
+		"chest": Rect2(29, 27, 34, 46),
+		"pelvis": Rect2(31, 75, 30, 16),
+		"arm_upper_r": Rect2(15, 28, 11, 30),
+		"arm_lower_r": Rect2(11, 60, 11, 30),
+		"arm_upper_l": Rect2(66, 28, 11, 30),
+		"arm_lower_l": Rect2(70, 60, 11, 30),
+		"leg_upper_r": Rect2(31, 94, 13, 36),
+		"leg_lower_r": Rect2(30, 132, 13, 36),
+		"leg_upper_l": Rect2(48, 94, 13, 36),
+		"leg_lower_l": Rect2(49, 132, 13, 36),
+	}
 
 	func _draw() -> void:
-		var box := Rect2(Vector2(0, 22), Vector2(140, 160))
-		var accent := HOT if active else DIM
-		draw_string(get_theme_default_font(), Vector2(0, 14), "SWORD" + (" — ACTIVE" if active else " — hold LMB"),
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 13, accent)
-		draw_rect(box, Color(1, 1, 1, 0.06))
-		draw_rect(box, accent, false, 1.5)
-		var t := Vector2(inverse_lerp(Player.HAND_MIN.x, Player.HAND_MAX.x, hand.x),
-				1.0 - inverse_lerp(Player.HAND_MIN.y, Player.HAND_MAX.y, hand.y))
-		var p := box.position + t * box.size
-		var dir := Vector2(sin(roll), -cos(roll)) * 14.0
-		draw_line(p - dir, p + dir, accent, 2.0)
-		draw_circle(p, 6.0, accent)
-		# Reach: top of the bar is full extension.
-		var bar := Rect2(Vector2(152, 22), Vector2(12, 160))
-		draw_rect(bar, Color(1, 1, 1, 0.06))
-		var r := inverse_lerp(Player.HAND_MAX.z, Player.HAND_MIN.z, hand.z)
-		draw_rect(Rect2(bar.position + Vector2(0, bar.size.y * (1.0 - r)), Vector2(12, bar.size.y * r)), accent)
+		if fighter == null:
+			return
+		for part_name: String in LAYOUT:
+			var rect: Rect2 = LAYOUT[part_name]
+			if not fighter.health.has(part_name):
+				continue
+			if fighter.is_severed(part_name):
+				draw_rect(rect, Color(0.1, 0.08, 0.07, 0.8))
+				draw_line(rect.position, rect.end, Color(0.7, 0.1, 0.08), 2.0)
+				draw_line(Vector2(rect.end.x, rect.position.y), Vector2(rect.position.x, rect.end.y), Color(0.7, 0.1, 0.08), 2.0)
+				continue
+			var h := clampf(fighter.health[part_name] / fighter.max_health[part_name], 0.0, 1.0)
+			var color := Color(0.62, 0.08, 0.06).lerp(Color(0.78, 0.74, 0.64), h)
+			draw_rect(rect, color)
+			if fighter.bleed.get(part_name, 0.0) > 0.15:
+				draw_rect(rect, Color(0.85, 0.1, 0.08), false, 2.0)
+
+
+class Crosshair extends Control:
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, 2.0, Color(1, 1, 1, 0.7))

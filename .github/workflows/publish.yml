@@ -1,8 +1,7 @@
 name: Build and publish
 
-# Every push to main exports the game for Web, Windows and Linux, deploys the
-# web build to GitHub Pages and refreshes the "latest" release downloads.
-# Pull requests only run the exports, as a check.
+# Every push to main exports the game for Windows and Linux and refreshes the
+# "latest" release downloads. Pull requests only run the exports, as a check.
 
 on:
   push:
@@ -12,8 +11,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: publish-${{ github.ref }}
@@ -35,7 +32,7 @@ jobs:
           path: |
             ~/godot
             ~/.local/share/godot/export_templates
-          key: godot-${{ env.GODOT_VERSION }}-web-win-linux
+          key: godot-${{ env.GODOT_VERSION }}-win-linux
 
       - name: Install Godot and export templates
         if: steps.cache.outputs.cache-hit != 'true'
@@ -50,7 +47,6 @@ jobs:
           mkdir -p "$dest"
           unzip -q -j templates.tpz \
             templates/version.txt \
-            templates/web_nothreads_release.zip \
             templates/linux_release.x86_64 \
             templates/windows_release_x86_64.exe \
             templates/windows_release_x86_64_console.exe \
@@ -62,23 +58,14 @@ jobs:
 
       - name: Export
         run: |
-          mkdir -p build/web build/windows build/linux
+          mkdir -p build/windows build/linux
           touch build/.gdignore
-          ~/godot/godot --headless --path . --export-release "Web" build/web/index.html
           ~/godot/godot --headless --path . --export-release "Windows" build/windows/dumbgame.exe
           ~/godot/godot --headless --path . --export-release "Linux" build/linux/dumbgame.x86_64
-          test -s build/web/index.wasm
           test -s build/windows/dumbgame.exe
           test -s build/linux/dumbgame.x86_64
           (cd build/windows && zip -q -r ../dumbgame-windows.zip .)
           (cd build/linux && zip -q -r ../dumbgame-linux.zip .)
-          (cd build/web && zip -q -r ../dumbgame-web.zip .)
-
-      - name: Upload web build for Pages
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: build/web
 
       - name: Publish "latest" release
         if: github.event_name != 'pull_request'
@@ -87,19 +74,8 @@ jobs:
         run: |
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest \
-            build/dumbgame-windows.zip build/dumbgame-linux.zip build/dumbgame-web.zip \
+            build/dumbgame-windows.zip build/dumbgame-linux.zip \
             --target "$GITHUB_SHA" \
             --title "Latest build" \
-            --notes "Automatic build of ${GITHUB_SHA::7}. Play in the browser: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+            --notes "Automatic build of ${GITHUB_SHA::7}. Unzip and run dumbgame.exe (Windows) or dumbgame.x86_64 (Linux)."
 
-  deploy:
-    if: github.event_name != 'pull_request'
-    needs: export
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
