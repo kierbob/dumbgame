@@ -10,7 +10,15 @@ a sword.
 
 ![Slashing the training dummy](docs/screenshot.png)
 
-## Running it
+## Play it
+
+- **In your browser:** https://kierbob.github.io/dumbgame/
+- **Downloads (Windows / Linux):** [latest release](https://github.com/kierbob/dumbgame/releases/tag/latest)
+
+Both update automatically on every push to `main` (see
+`.github/workflows/publish.yml`).
+
+## Running it from source
 
 1. Install [Godot 4.7](https://godotengine.org/download) (standard build, no
    C# needed).
