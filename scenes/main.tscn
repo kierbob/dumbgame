@@ -5,58 +5,41 @@
 [ext_resource type="Script" path="res://scripts/dummy.gd" id="3_dummy"]
 [ext_resource type="Script" path="res://scripts/camera_rig.gd" id="4_rig"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="5_hud"]
-[ext_resource type="Texture2D" path="res://assets/kenney_fps_kit/sprites/skybox.png" id="6_sky"]
-[ext_resource type="Texture2D" path="res://addons/kenney_prototype_textures/dark/texture_02.png" id="7_floor"]
-[ext_resource type="Texture2D" path="res://addons/kenney_prototype_textures/orange/texture_01.png" id="8_wall"]
-[ext_resource type="Texture2D" path="res://addons/kenney_prototype_textures/light/texture_07.png" id="9_block"]
-[ext_resource type="Texture2D" path="res://addons/kenney_prototype_textures/green/texture_09.png" id="10_ramp"]
-[ext_resource type="PackedScene" path="res://assets/kenney_fps_kit/models/grass.glb" id="11_grass"]
-[ext_resource type="PackedScene" path="res://assets/kenney_fps_kit/models/grass-small.glb" id="12_grass_small"]
-[ext_resource type="PackedScene" path="res://assets/kenney_fps_kit/models/cloud.glb" id="13_cloud"]
+[ext_resource type="Script" path="res://scripts/arena.gd" id="6_arena"]
 
-[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_sky"]
-panorama = ExtResource("6_sky")
-energy_multiplier = 0.6
+[sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
+sky_top_color = Color(0.36, 0.4, 0.45, 1)
+sky_horizon_color = Color(0.66, 0.64, 0.6, 1)
+sky_curve = 0.12
+ground_bottom_color = Color(0.16, 0.13, 0.1, 1)
+ground_horizon_color = Color(0.5, 0.47, 0.42, 1)
+sun_angle_max = 20.0
+energy_multiplier = 0.9
 
 [sub_resource type="Sky" id="Sky_main"]
-sky_material = SubResource("PanoramaSkyMaterial_sky")
+sky_material = SubResource("Sky_mat")
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 2
 sky = SubResource("Sky_main")
 ambient_light_source = 3
-ambient_light_energy = 0.9
-tonemap_mode = 2
+ambient_light_energy = 0.7
+tonemap_mode = 4
 ssao_enabled = true
-ssao_radius = 0.6
+ssao_radius = 0.8
+ssao_intensity = 1.6
 glow_enabled = true
-
-[sub_resource type="StandardMaterial3D" id="Mat_floor"]
-albedo_texture = ExtResource("7_floor")
-roughness = 0.9
-uv1_scale = Vector3(0.25, 0.25, 0.25)
-uv1_triplanar = true
-
-[sub_resource type="StandardMaterial3D" id="Mat_wall"]
-albedo_texture = ExtResource("8_wall")
-roughness = 0.9
-uv1_scale = Vector3(0.25, 0.25, 0.25)
-uv1_triplanar = true
-
-[sub_resource type="StandardMaterial3D" id="Mat_block"]
-albedo_texture = ExtResource("9_block")
-roughness = 0.9
-uv1_scale = Vector3(0.5, 0.5, 0.5)
-uv1_triplanar = true
-
-[sub_resource type="StandardMaterial3D" id="Mat_ramp"]
-albedo_texture = ExtResource("10_ramp")
-roughness = 0.9
-uv1_scale = Vector3(0.5, 0.5, 0.5)
-uv1_triplanar = true
+glow_intensity = 0.3
+fog_enabled = true
+fog_light_color = Color(0.58, 0.56, 0.52, 1)
+fog_density = 0.012
+fog_sky_affect = 0.25
+adjustment_enabled = true
+adjustment_contrast = 1.08
+adjustment_saturation = 0.85
 
 [sub_resource type="SphereShape3D" id="Shape_camera"]
-radius = 0.2
+radius = 0.15
 
 [node name="Main" type="Node3D" node_paths=PackedStringArray("player", "dummy", "hud")]
 script = ExtResource("1_main")
@@ -68,151 +51,50 @@ hud = NodePath("HUD")
 environment = SubResource("Environment_main")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-rotation = Vector3(-0.95, 0.6, 0)
-light_energy = 1.1
+rotation = Vector3(-0.5, 0.85, 0)
+light_color = Color(1, 0.9, 0.78, 1)
+light_energy = 1.4
 shadow_enabled = true
-directional_shadow_max_distance = 60.0
+directional_shadow_max_distance = 40.0
 
-[node name="Level" type="Node3D" parent="."]
-
-[node name="Floor" type="CSGBox3D" parent="Level"]
-position = Vector3(0, -0.5, 0)
-use_collision = true
-size = Vector3(40, 1, 40)
-material = SubResource("Mat_floor")
-
-[node name="WallNorth" type="CSGBox3D" parent="Level"]
-position = Vector3(0, 1, -20.5)
-use_collision = true
-size = Vector3(42, 2, 1)
-material = SubResource("Mat_wall")
-
-[node name="WallSouth" type="CSGBox3D" parent="Level"]
-position = Vector3(0, 1, 20.5)
-use_collision = true
-size = Vector3(42, 2, 1)
-material = SubResource("Mat_wall")
-
-[node name="WallEast" type="CSGBox3D" parent="Level"]
-position = Vector3(20.5, 1, 0)
-use_collision = true
-size = Vector3(1, 2, 40)
-material = SubResource("Mat_wall")
-
-[node name="WallWest" type="CSGBox3D" parent="Level"]
-position = Vector3(-20.5, 1, 0)
-use_collision = true
-size = Vector3(1, 2, 40)
-material = SubResource("Mat_wall")
-
-[node name="Platform" type="CSGBox3D" parent="Level"]
-position = Vector3(7, 0.3, -4)
-use_collision = true
-size = Vector3(4, 0.6, 4)
-material = SubResource("Mat_block")
-
-[node name="Ramp" type="CSGBox3D" parent="Level"]
-position = Vector3(3.5, 0.2, -4)
-rotation = Vector3(0, 0, 0.1974)
-use_collision = true
-size = Vector3(3.1, 0.2, 2.5)
-material = SubResource("Mat_ramp")
-
-[node name="Step1" type="CSGBox3D" parent="Level"]
-position = Vector3(-6, 0.075, 5)
-use_collision = true
-size = Vector3(3, 0.15, 1)
-material = SubResource("Mat_block")
-
-[node name="Step2" type="CSGBox3D" parent="Level"]
-position = Vector3(-6, 0.15, 6)
-use_collision = true
-size = Vector3(3, 0.3, 1)
-material = SubResource("Mat_block")
-
-[node name="Step3" type="CSGBox3D" parent="Level"]
-position = Vector3(-6, 0.225, 7)
-use_collision = true
-size = Vector3(3, 0.45, 1)
-material = SubResource("Mat_block")
-
-[node name="Pillar1" type="CSGCylinder3D" parent="Level"]
-position = Vector3(-4, 1.5, -9)
-use_collision = true
-radius = 0.6
-height = 3.0
-sides = 16
-material = SubResource("Mat_wall")
-
-[node name="Pillar2" type="CSGCylinder3D" parent="Level"]
-position = Vector3(4, 1.5, -9)
-use_collision = true
-radius = 0.6
-height = 3.0
-sides = 16
-material = SubResource("Mat_wall")
-
-[node name="Decor" type="Node3D" parent="Level"]
-
-[node name="Grass1" parent="Level/Decor" instance=ExtResource("11_grass")]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, -18, 0, -18)
-
-[node name="Grass2" parent="Level/Decor" instance=ExtResource("12_grass_small")]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, -16.5, 0, -18.5)
-
-[node name="Grass3" parent="Level/Decor" instance=ExtResource("11_grass")]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 18, 0, -17)
-
-[node name="Grass4" parent="Level/Decor" instance=ExtResource("12_grass_small")]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 17.5, 0, 18)
-
-[node name="Grass5" parent="Level/Decor" instance=ExtResource("11_grass")]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, -18, 0, 17)
-
-[node name="Grass6" parent="Level/Decor" instance=ExtResource("12_grass_small")]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, -4.8, 0, -8.2)
-
-[node name="Grass7" parent="Level/Decor" instance=ExtResource("11_grass")]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 4.9, 0, -9.8)
-
-[node name="Cloud1" parent="Level/Decor" instance=ExtResource("13_cloud")]
-transform = Transform3D(6, 0, 0, 0, 6, 0, 0, 0, 6, -25, 14, -40)
-
-[node name="Cloud2" parent="Level/Decor" instance=ExtResource("13_cloud")]
-transform = Transform3D(8, 0, 0, 0, 8, 0, 0, 0, 8, 30, 18, -35)
-
-[node name="Cloud3" parent="Level/Decor" instance=ExtResource("13_cloud")]
-transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 40, 12, 20)
+[node name="Arena" type="Node3D" parent="."]
+script = ExtResource("6_arena")
 
 [node name="Player" type="Node3D" parent="." node_paths=PackedStringArray("camera_rig")]
-position = Vector3(0, 0.02, 3.2)
+position = Vector3(0, 0.02, 1.6)
 script = ExtResource("2_player")
 camera_rig = NodePath("../CameraRig")
+head_layers = 2
 
 [node name="Dummy" type="Node3D" parent="." node_paths=PackedStringArray("opponent")]
-position = Vector3(0, 0.02, 0)
+position = Vector3(0, 0.02, -1.4)
 rotation = Vector3(0, 3.14159, 0)
 script = ExtResource("3_dummy")
 opponent = NodePath("../Player")
-body_color = Color(0.84, 0.7, 0.45, 1)
-accent_color = Color(0.52, 0.37, 0.22, 1)
-skin_color = Color(0.9, 0.78, 0.52, 1)
+skin_color = Color(0.8, 0.62, 0.5, 1)
+hair_color = Color(0.35, 0.24, 0.14, 1)
+shirt_color = Color(0.42, 0.23, 0.17, 1)
+trousers_color = Color(0.3, 0.28, 0.24, 1)
+helmet = true
+padded = true
 body_layer = 8
 body_mask = 15
 
-[node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target")]
+[node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target", "opponent")]
 script = ExtResource("4_rig")
 target = NodePath("../Player")
+opponent = NodePath("../Dummy")
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CameraRig"]
-position = Vector3(-0.55, 0, 0)
+position = Vector3(-0.42, 0, 0)
 collision_mask = 1
 shape = SubResource("Shape_camera")
-spring_length = 3.8
+spring_length = 2.3
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig/SpringArm3D"]
 current = true
 fov = 70.0
+near = 0.03
 
 [node name="HUD" type="CanvasLayer" parent="."]
 script = ExtResource("5_hud")
